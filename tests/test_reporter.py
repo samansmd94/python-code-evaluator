@@ -1,0 +1,27 @@
+from evaluator.reporter import generate_report
+
+
+def test_reporter_displays_passed_and_failed_counts(capsys):
+    results = [
+        {
+            "input": (2, 3),
+            "expected": 5,
+            "actual": 5,
+            "passed": True,
+        },
+        {
+            "input": (2, 3),
+            "expected": 10,
+            "actual": 5,
+            "passed": False,
+        },
+    ]
+
+    generate_report(results)
+
+    captured = capsys.readouterr()
+
+    assert "Total tests: 2" in captured.out
+    assert "Passed: 1" in captured.out
+    assert "Failed: 1" in captured.out
+    assert "Success rate: 50.00%" in captured.out
