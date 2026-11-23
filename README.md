@@ -75,7 +75,7 @@ python-code-evaluator/
 Clone the repository:
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone https://github.com/samansmd94/python-code-evaluator.git
 cd python-code-evaluator
 ```
 
