@@ -1,161 +1,186 @@
 # Python Code Evaluator
 
-A lightweight Python function evaluation tool that executes trusted Python functions against predefined test cases and generates detailed evaluation reports.
+Python Code Evaluator is a small tool for evaluating **trusted, locally defined Python functions** against JSON test cases. Version 2.0.0 adds a registry-based command line, stronger test-case validation, optional numeric tolerance, structured reports, and clearer error states.
 
-## Overview
+> **Security:** This project is not a sandbox. It must only execute functions that you trust and that are defined as part of the project. Do not use it to run arbitrary code supplied by users.
 
-Python Code Evaluator is a modular project designed to evaluate Python functions using structured test cases.
+## Features
 
-It supports:
-- Executing Python functions with different arguments.
-- Comparing actual results with expected results.
-- Handling execution errors and exceptions.
-- Loading test cases from JSON files.
-- Validating test-case structures.
-- Generating individual evaluation reports.
-- Generating combined evaluation summaries.
-- Automated testing with pytest.
+- Execute registered local functions with positional arguments.
+- Compare results using exact equality by default, or optional numeric tolerance (including nested lists and dictionaries).
+- Distinguish passed tests, ordinary comparison failures, and execution errors.
+- Load and validate JSON test-case files with case-specific error messages.
+- Print per-test reports and combined summaries; export deterministic JSON to standard output.
+- Use the CLI without editing `main.py`.
+- Add trusted functions through a small registry API.
+- Run the test suite with pytest. Runtime code uses only the Python standard library.
 
-## Project Status
+## Architecture
 
-**Currently under development.**
+| Module | Responsibility |
+|---|---|
+| `evaluator/runner.py` | Calls one trusted function and captures ordinary exceptions. |
+| `evaluator/comparator.py` | Applies exact comparison or optional numeric tolerance. |
+| `evaluator/engine.py` | Coordinates execution and comparison and creates per-case results. |
+| `evaluator/loader.py` | Loads JSON and validates test cases. |
+| `evaluator/reporter.py` | Builds summary data, prints text reports, and serializes JSON. |
+| `evaluator/registry.py` | Maps safe CLI names to explicitly trusted project functions. |
+| `evaluator/cli.py` | Parses commands, runs evaluations, and sets exit codes. |
+| `exercises/` | Contains the example functions that the registry exposes. |
 
-The current version evaluates trusted Python functions defined within the project.
-
-An important future development goal is to support user-submitted Python code.
-
-This will require additional security and execution-isolation capabilities, including appropriate sandboxing, resource restrictions, execution time limits, and protection against unauthorized access to files and system resources.
-
-The current implementation is **not a secure sandbox** and must not be used to execute untrusted code.
-
-## Project Structure
+### Project structure
 
 ```text
 python-code-evaluator/
-│
 ├── evaluator/
 │   ├── __init__.py
-│   ├── runner.py
+│   ├── __main__.py
+│   ├── cli.py
 │   ├── comparator.py
 │   ├── engine.py
+│   ├── loader.py
+│   ├── registry.py
 │   ├── reporter.py
-│   └── loader.py
-│
+│   └── runner.py
 ├── exercises/
 │   ├── __init__.py
 │   └── basic_exercises.py
-│
 ├── test_cases/
-│   ├── addition.json
-│   ├── division.json
-│   └── greeting.json
-│
 ├── tests/
-│   ├── test_comparator.py
-│   ├── test_engine.py
-│   ├── test_loader.py
-│   ├── test_reporter.py
-│   └── test_runner.py
-│
-├── main.py
-├── requirements.txt
-├── .gitignore
+├── main.py                 # compatible all-exercises entry point
+├── requirements.txt        # pytest for development
 └── README.md
 ```
 
-## Technologies
-
-- Python
-- JSON
-- pytest
-- Git
-
 ## Installation
 
-Clone the repository:
+Use Python 3.10 or newer. Clone the repository and enter its directory:
 
 ```bash
 git clone https://github.com/samansmd94/python-code-evaluator.git
 cd python-code-evaluator
 ```
 
-Create a virtual environment:
+Create and activate a virtual environment, then install the development dependency:
 
 ```bash
 python3 -m venv .venv
+source .venv/bin/activate       # macOS/Linux
+python -m pip install -r requirements.txt
 ```
 
-Activate it on macOS or Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
+The evaluator itself has no third-party runtime dependencies. `requirements.txt` contains pytest for development.
 
 ## Usage
 
-Run the evaluator:
+Run one registered function and its test file:
 
 ```bash
-python main.py
+python -m evaluator run --function add --tests test_cases/addition.json
 ```
 
-The program loads predefined test cases from the `test_cases/` directory, evaluates the corresponding Python functions, and displays individual reports and an overall summary.
+Other registered functions are `divide` and `greet`:
 
-## Example Test Case
+```bash
+python -m evaluator run --function greet --tests test_cases/greeting.json
+python -m evaluator run --function divide --tests test_cases/division.json
+```
 
-Test cases are stored in JSON format.
+Use `--format json` to write a machine-readable report to standard output. Add `--tolerance` to allow small numeric differences:
+
+```bash
+python -m evaluator run --function add --tests test_cases/addition.json --format json
+python -m evaluator run --function divide --tests test_cases/division.json --tolerance 0.000001
+```
+
+Get command help with:
+
+```bash
+python -m evaluator --help
+python -m evaluator run --help
+```
+
+`python main.py` remains available and runs the three example evaluations together.
+
+### Exit codes
+
+- `0`: all test cases passed.
+- `1`: at least one test failed or raised an execution error.
+- `2`: invalid CLI arguments or an input file could not be loaded.
+
+An invalid function name is rejected by the CLI's registered choices; user-provided names are never imported or evaluated dynamically.
+
+## JSON test-case format
+
+The root must be a non-empty array. Each item must contain exactly `input` and `expected`. `input` is a non-empty array of positional arguments. `expected` may be any standard JSON value: `null`, a string, number, boolean, array, or object. Values nested inside inputs and expected results must also be JSON values.
 
 ```json
 [
-    {
-        "input": [2, 3],
-        "expected": 5
-    },
-    {
-        "input": [10, 20],
-        "expected": 30
-    }
+  {"input": [2, 3], "expected": 5},
+  {"input": [10, 20], "expected": 30}
 ]
 ```
 
-The `input` field contains the positional arguments passed to the function, while `expected` contains the expected return value.
+Unexpected fields, missing fields, invalid JSON, empty files, and empty case arrays are reported as input errors. Empty `input` arrays are rejected to match the original format; functions that take no arguments can still be evaluated directly through the Python API.
 
-## Running Tests
+## Results and example output
 
-Run the automated test suite:
+Each evaluation result contains `input`, `expected`, `actual`, `passed`, `error`, `status`, and `test_number`. `status` is `passed`, `failed`, or `error`; Each test is counted in exactly one category: passed, failed, or error. Execution errors are reported separately and are not included in the failed count.
+
+Text output includes each case and a summary. A successful run ends with a summary like:
+
+```text
+Total tests: 2
+Passed: 2
+Failed: 0
+Errors: 0
+Success rate: 100.00%
+```
+
+JSON output is a stable object with `total`, `passed`, `failed`, `errors`, `success_rate`, and `results` fields. It is intended for other tools to consume.
+
+## Add a trusted function
+
+Define the function in project code and add it to the registry in
+`evaluator/registry.py`. The CLI's choices are built from that registry:
+
+```python
+from exercises.my_exercises import my_function
+from evaluator.registry import register_function
+
+register_function("my_function", my_function)
+```
+
+For applications embedding the evaluator, `register_function(name, function)`
+provides the same registration API. Only add functions you trust.
+
+## Error handling and logging
+
+The runner catches ordinary exceptions raised while calling a function, returns the error message, and logs a warning with the function name and error. It does not hide the distinction between an execution error and a result that simply did not match. Invalid test files produce clear `ValueError` or `FileNotFoundError` messages; the CLI displays those as concise errors and exits with code 2. Reports go to standard output, while logs and CLI errors go to standard error.
+
+## Automated tests
+
+Run all automated tests from the project root:
 
 ```bash
 python -m pytest -q
 ```
 
-The project currently includes 29 automated tests covering the evaluator's core components.
+The suite covers execution, comparison, evaluation, loader validation, reporting, registry-backed CLI behavior, and a module-command integration path.
 
-## Architecture
+## Limitations and security considerations
 
-The application is divided into separate modules:
+This version calls Python functions in the same process as the evaluator. Exception handling only reports ordinary failures; it does not prevent a function from accessing files, using the network, consuming excessive CPU or memory, changing process state, or terminating the process. A subprocess by itself, restricted built-ins, and a hand-built Python sandbox do not make arbitrary Python code safe.
 
-| Module | Responsibility |
-|---|---|
-| `runner.py` | Executes functions and captures exceptions |
-| `comparator.py` | Compares actual and expected results |
-| `engine.py` | Coordinates the evaluation process |
-| `reporter.py` | Generates individual and overall reports |
-| `loader.py` | Loads and validates JSON test cases |
+Do not expose this application as a service that accepts and runs untrusted code. If that becomes a requirement, use a separately isolated execution service or an established isolation technology. A safe design needs strong process or machine isolation, strict time and resource limits, restricted filesystem access, disabled or controlled network access, and careful handling of communication between the evaluator and the isolated worker. Those protections are outside this project's current scope.
 
-## Future Development
+## Roadmap
 
-- Secure execution of user-submitted Python code.
-- Isolated execution environments.
-- Execution time and resource limits.
-- More flexible test-case validation.
-- Additional evaluation and reporting capabilities.
-- Improved command-line interface.
+- Add broader examples for validation and comparison behavior.
+- Consider richer output destinations and summary formats if users need them.
+- Research an established isolated execution service before considering any untrusted-code feature.
+
+No untrusted-code execution or sandbox is planned as part of the current application.
 
 ## License
 

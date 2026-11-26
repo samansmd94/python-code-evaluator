@@ -101,3 +101,31 @@ def test_load_test_cases_expected_string(tmp_path):
     result = load_test_cases(file_path)
 
     assert result[0]["expected"] == "Hello Saman"
+
+
+def test_load_test_cases_nested_json_values(tmp_path):
+    file_path = tmp_path / "nested.json"
+    test_data = [{"input": [{"items": [1, None]}], "expected": {"ok": True}}]
+    file_path.write_text(json.dumps(test_data))
+    assert load_test_cases(file_path) == test_data
+
+
+def test_load_test_cases_empty_file(tmp_path):
+    file_path = tmp_path / "empty_file.json"
+    file_path.write_text("  \n")
+    with pytest.raises(ValueError, match="file is empty"):
+        load_test_cases(file_path)
+
+
+def test_load_test_cases_reports_case_number(tmp_path):
+    file_path = tmp_path / "bad_second_case.json"
+    file_path.write_text('[{"input": [1], "expected": 1}, {"expected": 2}]')
+    with pytest.raises(ValueError, match="Test case 2"):
+        load_test_cases(file_path)
+
+
+def test_load_test_cases_rejects_non_standard_numbers(tmp_path):
+    file_path = tmp_path / "nan.json"
+    file_path.write_text('[{"input": [NaN], "expected": 1}]')
+    with pytest.raises(ValueError, match="Invalid JSON format"):
+        load_test_cases(file_path)

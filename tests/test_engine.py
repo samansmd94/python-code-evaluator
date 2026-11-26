@@ -54,6 +54,7 @@ def test_evaluate_handles_execution_error():
     assert results[0]["passed"] is False
     assert results[0]["actual"] is None
     assert results[0]["error"] is not None
+    assert results[0]["status"] == "error"
 
 def test_evaluate_accepts_string_that_looks_like_error():
     def get_message():
@@ -102,3 +103,13 @@ def test_evaluate_none_returning_function():
     assert results[0]["actual"] is None
     assert results[0]["passed"] is True
     assert results[0]["error"] is None
+
+
+def test_evaluate_distinguishes_comparison_failure():
+    results = evaluate(add, [{"input": [2, 3], "expected": 9}])
+    assert results[0]["status"] == "failed"
+
+
+def test_evaluate_accepts_optional_tolerance():
+    results = evaluate(lambda: 0.1 + 0.2, [{"input": [], "expected": 0.3}], tolerance=1e-9)
+    assert results[0]["passed"] is True

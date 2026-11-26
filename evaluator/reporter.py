@@ -1,67 +1,85 @@
-def generate_report(results):
+"""Build machine-readable evaluation summaries and print readable reports."""
 
-    passed = 0
-    failed = 0
-    errors = 0
+import json
+from typing import Any, Dict, Iterable, Mapping
 
+
+def summarize_results(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Return deterministic counts and individual results for one evaluation."""
+    result_list = [dict(result) for result in results]
+    errors = sum(1 for result in result_list if result.get("error") is not None)
+    passed = sum(1 for result in result_list if result.get("passed", False))
+    failed = sum(
+        1 for result in result_list
+        if not result.get("passed", False) and result.get("error") is None
+    )
+    total = len(result_list)
+    return {
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "errors": errors,
+        "success_rate": (passed / total * 100) if total else 0.0,
+        "results": result_list,
+    }
+
+
+def generate_report(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Print a readable report and return its structured summary."""
+    summary = summarize_results(results)
     print("=" * 40)
     print("         EVALUATION REPORT")
     print("=" * 40)
 
-    for test_number, result in enumerate(results, start=1):
-
-        print(f"\nTest {test_number}:")
-        print(f'Input: {result["input"]}')
-        print(f'Expected: {result["expected"]}')
-        print(f'Actual: {result["actual"]}')
+    for number, result in enumerate(summary["results"], start=1):
+        print("\nTest {}:".format(number))
+        print("Input: {}".format(result.get("input")))
+        print("Expected: {}".format(result.get("expected")))
+        print("Actual: {}".format(result.get("actual")))
         if result.get("error") is not None:
-            print(f'Error: {result["error"]}')
-            errors += 1
+            print("Error: {}".format(result["error"]))
+        status = result.get("status")
+        if status is None:
+            status = "passed" if result.get("passed", False) else "failed"
+        print("Status: {}".format(status.upper()))
 
-        if result["passed"]:
-            print("Status: PASSED")
-            passed += 1
-        else:
-            print("Status: FAILED")
-            failed += 1
+    _print_summary(summary)
+    return summary
 
-    total_tests = len(results)
-    success_rate = (passed/total_tests)*100 if total_tests else 0
 
-    print("\n" + "=" * 40)
-    print(f'Total tests: {total_tests}')
-    print(f'Passed: {passed}')
-    print(f'Failed: {failed}')
-    print(f'Errors: {errors}')
-    print(f'Success rate: {success_rate:.2f}%')
-    print("=" * 40)
-
-def generate_overall_summary(all_results):
-    total_tests = 0
-    passed = 0
-    failed = 0
-    errors = 0
-
-    for results in all_results:
-        total_tests += len(results)
-
-        for result in results:
-            if result["passed"]:
-                passed += 1
-            else:
-                failed += 1
-
-            if result.get("error") is not None:
-                errors += 1
-
-    success_rate = (passed / total_tests) * 100 if total_tests else 0
-
+def generate_overall_summary(
+    all_results: Iterable[Iterable[Mapping[str, Any]]],
+) -> Dict[str, Any]:
+    """Print and return counts combined across multiple evaluations."""
+    combined = [result for results in all_results for result in results]
+    summary = summarize_results(combined)
     print("\n" + "=" * 40)
     print("         OVERALL SUMMARY")
     print("=" * 40)
-    print(f"Total tests: {total_tests}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
-    print(f"Errors: {errors}")
-    print(f"Success rate: {success_rate:.2f}%")
+    _print_summary_lines(summary)
+    return summary
+
+
+def report_json(results: Iterable[Mapping[str, Any]], *, indent: int = 2) -> str:
+    """Serialize a report as stable JSON for other tools."""
+    return json.dumps(
+        summarize_results(results),
+        ensure_ascii=False,
+        allow_nan=False,
+        indent=indent,
+        sort_keys=True,
+    )
+
+
+def _print_summary(summary: Mapping[str, Any]) -> None:
+    print("\n" + "=" * 40)
+    _print_summary_lines(summary)
+
+
+def _print_summary_lines(summary: Mapping[str, Any]) -> None:
+    print("Total tests: {}".format(summary["total"]))
+    print("Passed: {}".format(summary["passed"]))
+    print("Failed: {}".format(summary["failed"]))
+    print("Errors: {}".format(summary["errors"]))
+    print("Success rate: {:.2f}%".format(summary["success_rate"]))
     print("=" * 40)
